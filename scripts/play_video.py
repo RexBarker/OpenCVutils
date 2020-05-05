@@ -87,4 +87,4 @@ if __name__ == '__main__':
     if args.info:
         print(f"Number of frames: {n_frames}")
         print(f"Width x height = ({width},{height})")
-        print(f"Actual replay speed = {actual_fps}/s")
+        print(f"Actual replay speed = {actual_fps:.3f}/s")
