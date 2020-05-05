@@ -24,11 +24,10 @@ cap = cv2.VideoCapture(mp4file)
 n_frames = 0
 width,height = 0,0
 current = 0.0
-timesum = 0.0
+start = time()
 
 while True:
     timediff = time() - current
-    timesum += timediff
 
     if timediff < spf: 
         sleep(spf - timediff)
@@ -48,7 +47,7 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 
-actual_fps = n_frames / timesum
+actual_fps = n_frames / (time() - start)
 
 if args.info:
     print(f"Number of frames: {n_frames}")
