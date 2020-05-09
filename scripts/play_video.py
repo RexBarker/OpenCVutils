@@ -6,7 +6,7 @@ from time import time, sleep
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--infile', type=str, required=True, 
+parser.add_argument('--infile', type=str, required=None, 
                     help="input file in .mp4, .avi, .mov, or .mkv format")
 
 parser.add_argument('--fps', type=int, default=None, 
@@ -20,6 +20,8 @@ parser.add_argument('--rotate_left', action='store_true',
 
 parser.add_argument('--info', action='store_true', 
                     help="output video information")
+
+parser.add_argument('other', nargs=argparse.REMAINDER) # catch unnamed arguments
 
 
 ##### Helper functions #####
@@ -61,7 +63,14 @@ def get_frame(vfile):
 if __name__ == '__main__': 
     args = parser.parse_args()
 
-    vfile = args.infile
+    if args.infile:
+        vfile = args.infile 
+    elif args.other:
+        vfile = args.other[0]
+    else:
+        assert False,"No input file was specified"
+
+    assert os.path.exists(vfile), f"Input file was not found: {vfile}"
 
     if args.fps is not None:
         fps = args.fps
