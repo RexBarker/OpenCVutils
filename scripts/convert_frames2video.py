@@ -12,6 +12,7 @@ def parse_args():
                         help="input directory of frames (assuming numeric ordering)")
     parser.add_argument('--rotate_right', action='store_true', help="Rotate image by 90 deg clockwise")
     parser.add_argument('--rotate_left', action='store_true', help="Rotate image by 90 deg anticlockwise")
+    parser.add_argument('--fps', type=int, default=25, help="frames per second encoding speed (default=25 fps)")
     parser.add_argument('--output_file', type=str, default=None,
                         help="name of output mp4 file (default = input directory name")
 
@@ -20,7 +21,7 @@ def parse_args():
     return args
 
 
-def createVideoClip_Cmd(clip, folder, name, size=[256, 256]):
+def createVideoClip_Cmd(clip, ouputfile, fps, size=[256, 256]):
 
     vf = clip.shape[0]
     command = ['ffmpeg',
@@ -35,7 +36,7 @@ def createVideoClip_Cmd(clip, folder, name, size=[256, 256]):
                '-b:v', '1500k',
                '-vframes', str(vf),  # 5*25
                '-s', '%dx%d' % (size[1], size[0]),  # '256x256', # size of one frame
-               folder + '/' + name]
+               outputfile]
     # sfolder+'/'+name
     pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.PIPE)
     out, err = pipe.communicate(clip.tostring())
@@ -44,7 +45,7 @@ def createVideoClip_Cmd(clip, folder, name, size=[256, 256]):
     print(err)
 
 
-def createVideoClip(clip, folder, name, size=[256, 256]):
+def createVideoClip(clip, outputfile, fps, size=[256, 256]):
 
     vf = clip.shape[0]
      
@@ -53,19 +54,19 @@ def createVideoClip(clip, folder, name, size=[256, 256]):
                '-f', 'rawvideo',
                '-s', '%dx%d' % (size[1], size[0]),  # '256x256', # size of one frame
                '-pix_fmt', 'rgb24',
-               '-r', '25',  # frames per second
+               '-r', str(fps),  # frames per second
                '-an',  # Tells FFMPEG not to expect any audio
                '-i', '-',  # The input comes from a pipe
                '-vcodec', 'libx264',
                '-b:v', '1500k',
                '-vframes', str(vf),  # 5*25
                '-s', '%dx%d' % (size[1], size[0]),  # '256x256', # size of one frame
-               folder + '/' + name]
+               outputfile]
     
     process = (
         ffmpeg
         .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(size[1], size[0]))
-        .output(os.path.join(folder,name), pix_fmt='yuv420p', format='mp4', video_bitrate='1500k', r='25', s='{}x{}'.format(size[1], size[0]))
+        .output(outputfile, pix_fmt='yuv420p', format='mp4', video_bitrate='1500k', r=str(fps), s='{}x{}'.format(size[1], size[0]))
         .overwrite_output()
     )
     
@@ -96,7 +97,8 @@ if __name__ == '__main__':
 
     assert imgfiles, f"Could not find any suitable *.jpg or *.png files in {inputdir}" 
 
-    currdir = os.curdir
+    fps = args.fps
+    currdir = os.path.abspath(os.curdir)
 
     if args.output_file is not None:
         video_name = args.output_file
@@ -118,5 +120,9 @@ if __name__ == '__main__':
 
     final_clip = np.stack(out_frames)
 
-    createVideoClip(final_clip, currdir, video_name, [shape[0], shape[1]])
+    outputfile = os.path.join(currdir,video_name)
+
+    #createVideoClip(final_clip, outputfile, [shape[0], shape[1]])
+    createVideoClip_Cmd(final_clip, outputfile, fps, [shape[0], shape[1]])
+    print(f"\nVideo output file:{outputfile}")
     print("\nCompleted successfully")
