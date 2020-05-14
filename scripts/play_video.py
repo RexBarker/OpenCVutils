@@ -18,6 +18,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--infile', type=str, required=None, 
                     help="input file in .mp4, .avi, .mov, or .mkv format")
 
+parser.add_argument('--maskdir', type=str, required=None, 
+                    help="mask directory (*.jpg or *.png), total must be same as frame count")
+
 parser.add_argument('--fps', type=int, default=None, 
                     help="video replay frame rate, frames per second (default=60 fps)")
 
@@ -47,6 +50,21 @@ def get_fps(vfile):
     else:
         return None
 
+def get_nframes(vfile):
+    if not os.path.isdir(vfile):
+        cap = cv2.VideoCapture(vfile)
+        n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        print(f"File spec n_frames ={n_frames}")
+        cap.release()
+    else:
+        images = glob(os.path.join(vfile, '*.jp*'))
+        if not images:
+            images = glob(os.path.join(vfile, '*.png')) 
+        assert images, f"No image file (*.jpg or *.png) found in {vfile}"        
+        n_frames = len(images)
+
+    return n_frames 
+
 
 def get_frame(vfile):
     if os.path.isdir(vfile):
@@ -70,7 +88,26 @@ def get_frame(vfile):
             else:
                 cap.release()
                 break
-                
+
+def get_mask(maskdir,n_frames):
+    assert os.path.isdir(maskdir), \
+        "Use masks specified, however supplied path was not a directory:\n{maskdir}"
+    
+    images = glob(os.path.join(maskdir, '*.jp*'))
+    if not images:
+        images = glob(os.path.join(maskdir, '*.png'))
+    assert images, f"No mask files (*.jpg or *.png) found in {maskdir}"        
+    assert len(images) == n_frames, \
+        f"Mismatch in number of mask files versus number of frames\n" + \
+        f"n_frames={n_frames}, n_masks={len(images)}"
+
+    images = sorted(images,
+                    key=lambda x: int(x.split('/')[-1].split('.')[0]))
+
+    for img in images:
+        mask = cv2.imread(img)
+        yield mask 
+               
         
 if __name__ == '__main__': 
     args = parser.parse_args()
@@ -93,50 +130,77 @@ if __name__ == '__main__':
 
     spf = float(1.0/fps)
 
-    n_frames = 0
+    n_frames = get_nframes(vfile) 
     width,height = 0,0
     current = 0.0
 
-    start = time()
-    for i,frame in enumerate(get_frame(vfile)):
-        timediff = time() - current
+    replay = 1 
 
-        if timediff < spf: 
-            sleep(spf - timediff)
+    while replay:
+        start = time()
+    
+        frame_gen = get_frame(vfile)
+        mask_gen = get_mask(args.maskdir,n_frames) if args.maskdir else None
+ 
+        i_frames = 0
+        for i in range(n_frames): 
+            frame = next(frame_gen)
+            mask = next(mask_gen) if mask_gen else None 
 
-        current = time()
+            timediff = time() - current
+
+            if timediff < spf: 
+                sleep(spf - timediff)
+
+            current = time()
          
-        height,width = frame.shape[:2]
+            height,width = frame.shape[:2]
+    
+            ### optional add mask
+            # modify existing frame to include mask
+            if mask is not None:
+                if len(mask.shape) == 3:
+                    mask = mask[:,:,0]
+                frame[:, :, 2] = (mask > 0) * 255 + (mask == 0) * frame[:, :, 2]
 
-        real_x = round(fontconfig["rel_coords"][0] * width)
-        real_y = round(fontconfig["rel_coords"][1] * height)
+            ### optional rotations
+            if args.rotate_left:
+                frame = cv2.rotate(frame,cv2.ROTATE_90_COUNTERCLOCKWISE)
+            elif args.rotate_right:
+                frame = cv2.rotate(frame,cv2.ROTATE_90_CLOCKWISE)
 
-        n_frames += 1
+            ### add frame number to image
+            if args.frame_num:
+                real_x = round(fontconfig["rel_coords"][0] * width)
+                real_y = round(fontconfig["rel_coords"][1] * height)
+                cv2.putText(frame, str(i), 
+                            (real_x, real_y),
+                            fontconfig['font'],
+                            fontconfig['fontScale'],
+                            fontconfig['fontColor'],
+                            fontconfig['lineType'] )
 
-        ### optional rotations
-        if args.rotate_left:
-            frame = cv2.rotate(frame,cv2.ROTATE_90_COUNTERCLOCKWISE)
-        elif args.rotate_right:
-            frame = cv2.rotate(frame,cv2.ROTATE_90_CLOCKWISE)
+            ### show image
+            cv2.imshow('frame',frame)
+            keycode = cv2.waitKey(10)
+            if keycode & 0xFF == ord('p'):  # pause
+                keycode = cv2.waitKey(0)
 
-        ### add frame number to image
-        if args.frame_num:
-            cv2.putText(frame, str(i), 
-                        (real_x, real_y),
-                        fontconfig['font'],
-                        fontconfig['fontScale'],
-                        fontconfig['fontColor'],
-                        fontconfig['lineType'] )
+            if keycode & 0xFF == ord('q'):  # quit (immediately)
+                replay = 0
+                break
+            elif keycode & 0xFF == ord('e'):  # end (eventually)
+                replay = 0
+            elif keycode & 0xFF == ord('r'):  # restart
+                replay = 1
+                break
 
-        ### show image
-        cv2.imshow('frame',frame)
-        if cv2.waitKey(10) & 0xFF == ord('q'):
-            break
+            i_frames += 1
 
     #cap.release()
     cv2.destroyAllWindows()
 
-    actual_fps = n_frames / (time() - start)
+    actual_fps = i_frames / (time() - start)
 
     if args.info:
         print(f"Number of frames: {n_frames}")
