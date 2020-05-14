@@ -4,6 +4,15 @@ import argparse
 from glob import glob
 from time import time, sleep
 
+fontconfig = {
+    "font"         : cv2.FONT_HERSHEY_SIMPLEX,
+    "rel_coords"   : (0.8, 0.05),
+    "cornercoords" : (10,500),
+    "fontScale"    : 1, 
+    "fontColor"    : (0,255,0),
+    "lineType"     : 2
+}
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--infile', type=str, required=None, 
@@ -17,6 +26,9 @@ parser.add_argument('--rotate_right', action='store_true',
 
 parser.add_argument('--rotate_left', action='store_true', 
                     help="Rotate image by 90 deg anticlockwise")
+
+parser.add_argument('--frame_num', action='store_true', 
+                    help="display frame number")
 
 parser.add_argument('--info', action='store_true', 
                     help="output video information")
@@ -84,9 +96,9 @@ if __name__ == '__main__':
     n_frames = 0
     width,height = 0,0
     current = 0.0
-    start = time()
 
-    for frame in get_frame(vfile):
+    start = time()
+    for i,frame in enumerate(get_frame(vfile)):
         timediff = time() - current
 
         if timediff < spf: 
@@ -95,13 +107,28 @@ if __name__ == '__main__':
         current = time()
          
         height,width = frame.shape[:2]
+
+        real_x = round(fontconfig["rel_coords"][0] * width)
+        real_y = round(fontconfig["rel_coords"][1] * height)
+
         n_frames += 1
 
+        ### optional rotations
         if args.rotate_left:
             frame = cv2.rotate(frame,cv2.ROTATE_90_COUNTERCLOCKWISE)
         elif args.rotate_right:
             frame = cv2.rotate(frame,cv2.ROTATE_90_CLOCKWISE)
 
+        ### add frame number to image
+        if args.frame_num:
+            cv2.putText(frame, str(i), 
+                        (real_x, real_y),
+                        fontconfig['font'],
+                        fontconfig['fontScale'],
+                        fontconfig['fontColor'],
+                        fontconfig['lineType'] )
+
+        ### show image
         cv2.imshow('frame',frame)
         if cv2.waitKey(10) & 0xFF == ord('q'):
             break
