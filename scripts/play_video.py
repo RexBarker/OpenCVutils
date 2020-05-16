@@ -33,6 +33,10 @@ parser.add_argument('--rotate_left', action='store_true',
 parser.add_argument('--frame_num', action='store_true', 
                     help="display frame number")
 
+parser.add_argument('--start', type=int, default= 0, help="start from frame#")
+
+parser.add_argument('--finish', type=int, default= None, help="finish at frame#")
+
 parser.add_argument('--info', action='store_true', 
                     help="output video information")
 
@@ -127,12 +131,28 @@ if __name__ == '__main__':
         fps = get_fps(vfile) 
         if fps is None:
             fps = 60 
-
+    
     spf = float(1.0/fps)
 
     n_frames = get_nframes(vfile) 
     width,height = 0,0
     current = 0.0
+
+    startframe = 0
+    if args.start:
+        assert abs(args.start) < n_frames, \
+            f"Invalid 'start'={startframe} frame specified, exceeds number of frames ({n_frames})"
+
+        startframe = args.start if args.start >= 0 else n_frames + args.start  # negative indicates from end
+    
+    finishframe = n_frames
+    if args.finish is not None:
+        assert abs(args.finish) < n_frames, \
+            f"Invalid 'finish'={finishframe} frame specified, exceeds number of frames({n_frames})"
+
+        finishframe = args.finish if args.finish >= 0 else n_frames + args.finish  # negative indicates from end 
+    
+    assert finishframe > startframe, f"Invalid definition of 'start'={startframe} and 'finish'={finishframe}, start > finish"
 
     replay = 1 
 
@@ -146,6 +166,13 @@ if __name__ == '__main__':
         for i in range(n_frames): 
             frame = next(frame_gen)
             mask = next(mask_gen) if mask_gen else None 
+
+            # skip over non used frames 
+            # they must be read anyway, in the case of video files
+            if i < startframe: 
+                continue
+            elif i > finishframe:
+                break
 
             timediff = time() - current
 
@@ -184,7 +211,10 @@ if __name__ == '__main__':
             cv2.imshow('frame',frame)
             keycode = cv2.waitKey(10)
             if keycode & 0xFF == ord('p'):  # pause
-                keycode = cv2.waitKey(0)
+                while True:
+                    keycode = cv2.waitKey(0)
+                    if keycode & 0xFF == ord('p'): 
+                        break
 
             if keycode & 0xFF == ord('q'):  # quit (immediately)
                 replay = 0
