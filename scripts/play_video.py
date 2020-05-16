@@ -8,6 +8,7 @@ fontconfig = {
     "font"         : cv2.FONT_HERSHEY_SIMPLEX,
     "rel_coords"   : (0.8, 0.05),
     "cornercoords" : (10,500),
+    "minY"         : 30,
     "fontScale"    : 1, 
     "fontColor"    : (0,255,0),
     "lineType"     : 2
@@ -70,30 +71,47 @@ def get_nframes(vfile):
     return n_frames 
 
 
-def get_frame(vfile):
+def get_frame(vfile, n_frames, startframe=0, finishframe=None):
     if os.path.isdir(vfile):
         images = glob(os.path.join(vfile, '*.jp*'))
         if not images:
             images = glob(os.path.join(vfile, '*.png'))
         assert images, f"No image file (*.jpg or *.png) found in {vfile}"        
 
+        assert len(images) == n_frames, \
+            f"Mismatch in number of mask files versus number of frames\n" + \
+            f"n_frames={n_frames}, n_masks={len(images)}"
+
         images = sorted(images,
                         key=lambda x: int(x.split('/')[-1].split('.')[0]))
+
+        if finishframe is None:
+            finishframe = n_frames        
+
+        images = images[startframe:finishframe]
+
         for img in images:
             frame = cv2.imread(img)
             yield frame
 
     else:
         cap = cv2.VideoCapture(vfile)
+
+        # start frame is indexed
+        # stop frame is set by controlling loop (caller)
+        if startframe != 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, startframe)
+        
         while True:
             ret, frame = cap.read()
+            
             if ret:
                 yield frame
             else:
                 cap.release()
                 break
 
-def get_mask(maskdir,n_frames):
+def get_mask(maskdir,n_frames, startframe=0, finishframe=None):
     assert os.path.isdir(maskdir), \
         "Use masks specified, however supplied path was not a directory:\n{maskdir}"
     
@@ -107,6 +125,11 @@ def get_mask(maskdir,n_frames):
 
     images = sorted(images,
                     key=lambda x: int(x.split('/')[-1].split('.')[0]))
+    
+    if finishframe is None:
+        finishframe = n_frames
+    
+    images = images[startframe:finishframe]
 
     for img in images:
         mask = cv2.imread(img)
@@ -159,20 +182,13 @@ if __name__ == '__main__':
     while replay:
         start = time()
     
-        frame_gen = get_frame(vfile)
-        mask_gen = get_mask(args.maskdir,n_frames) if args.maskdir else None
+        frame_gen = get_frame(vfile, n_frames, startframe, finishframe)
+        mask_gen = get_mask(args.maskdir,n_frames, startframe, finishframe) if args.maskdir else None
  
         i_frames = 0
-        for i in range(n_frames): 
+        for i in range(startframe,finishframe): 
             frame = next(frame_gen)
             mask = next(mask_gen) if mask_gen else None 
-
-            # skip over non used frames 
-            # they must be read anyway, in the case of video files
-            if i < startframe: 
-                continue
-            elif i > finishframe:
-                break
 
             timediff = time() - current
 
@@ -199,7 +215,7 @@ if __name__ == '__main__':
             ### add frame number to image
             if args.frame_num:
                 real_x = round(fontconfig["rel_coords"][0] * width)
-                real_y = round(fontconfig["rel_coords"][1] * height)
+                real_y = max(round(fontconfig["rel_coords"][1] * height), fontconfig['minY'])
                 cv2.putText(frame, str(i), 
                             (real_x, real_y),
                             fontconfig['font'],
