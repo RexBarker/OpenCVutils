@@ -10,6 +10,10 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_dir', type=str, required=True, default=None,
                         help="input directory of frames (assuming numeric ordering)")
+
+    parser.add_argument('--mask_dir', type=str, required=False, default=None,
+                        help="(optional) input directory of masks (assuming numeric ordering)")
+
     parser.add_argument('--rotate_right', action='store_true', help="Rotate image by 90 deg clockwise")
     parser.add_argument('--rotate_left', action='store_true', help="Rotate image by 90 deg anticlockwise")
     parser.add_argument('--fps', type=int, default=25, help="frames per second encoding speed (default=25 fps)")
@@ -96,6 +100,10 @@ if __name__ == '__main__':
         if imgfiles: break
 
     assert imgfiles, f"Could not find any suitable *.jpg or *.png files in {inputdir}" 
+
+    # DAN, you left off here!
+    if arg.mask_dir is not None:
+        assert os.path.exists(args.mask_dir), f"Mask directory specified, but could not be found = {args.mask_dir}"
 
     fps = args.fps
     currdir = os.path.abspath(os.curdir)
