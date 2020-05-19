@@ -1,8 +1,14 @@
 import os
 import cv2
 import argparse
+import warnings
+from PIL import Image
 from glob import glob
 from time import time, sleep
+
+if cv2.__version__ < '4.1.0':
+    warnings.warn("cv2 version < 4.1.0, script not tested for earlier versions",
+                  UserWarning)
 
 fontconfig = {
     "font"         : cv2.FONT_HERSHEY_SIMPLEX,
@@ -38,6 +44,12 @@ parser.add_argument('--start', type=int, default= 0, help="start from frame#")
 
 parser.add_argument('--finish', type=int, default= None, help="finish at frame#")
 
+parser.add_argument('--outvideo', type=str, default = None, 
+                    help="Output selected sequence to video (.mp4, .avi, .mov)")
+                    
+parser.add_argument('--outgif', type=str, default = None, 
+                    help="Output selected sequence to gif (.gif)")
+
 parser.add_argument('--info', action='store_true', 
                     help="output video information")
 
@@ -55,6 +67,7 @@ def get_fps(vfile):
     else:
         return None
 
+
 def get_nframes(vfile):
     if not os.path.isdir(vfile):
         cap = cv2.VideoCapture(vfile)
@@ -69,6 +82,23 @@ def get_nframes(vfile):
         n_frames = len(images)
 
     return n_frames 
+
+
+def get_WidthHeight(vfile):
+    if not os.path.isdir(vfile):
+        cap = cv2.VideoCapture(vfile)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+    else:
+        images = glob(os.path.join(vfile, '*.jp*'))
+        if not images:
+            images = glob(os.path.join(vfile, '*.png')) 
+        assert images, f"No image file (*.jpg or *.png) found in {vfile}"        
+        img = cv2.imread(images[0])
+        height,width = img.shape[:2]
+
+    return (width, height) 
 
 
 def get_frame(vfile, n_frames, startframe=0, finishframe=None):
@@ -134,8 +164,8 @@ def get_mask(maskdir,n_frames, startframe=0, finishframe=None):
     for img in images:
         mask = cv2.imread(img)
         yield mask 
-               
         
+
 if __name__ == '__main__': 
     args = parser.parse_args()
 
@@ -158,7 +188,7 @@ if __name__ == '__main__':
     spf = float(1.0/fps)
 
     n_frames = get_nframes(vfile) 
-    width,height = 0,0
+    width,height = get_WidthHeight(vfile) 
     current = 0.0
 
     startframe = 0
@@ -179,6 +209,26 @@ if __name__ == '__main__':
 
     replay = 1 
 
+    # Write out edited video file?
+    outvid = None
+    if args.outvideo:
+        outvideofile = args.outvideo
+        
+        if outvideofile.endswith(".mp4"):
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        elif outvideofile.endswith(".avi"):
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        else:
+            assert False, f"Could not determine the video output type from {outvideofile}"
+        
+        outvid = cv2.VideoWriter(outvideofile, fourcc, fps, (width,height) )
+
+    # Write out edited GIF file?
+    outgif = None
+    outimgs = []
+    if args.outgif:
+        outgif = args.outgif
+
     while replay:
         start = time()
     
@@ -197,8 +247,6 @@ if __name__ == '__main__':
 
             current = time()
          
-            height,width = frame.shape[:2]
-    
             ### optional add mask
             # modify existing frame to include mask
             if mask is not None:
@@ -223,8 +271,18 @@ if __name__ == '__main__':
                             fontconfig['fontColor'],
                             fontconfig['lineType'] )
 
+            ### optional: write video of frames
+            if outvid is not None:
+                outvid.write(frame)
+
+            ### optional: write frames to gif
+            if outgif is not None:
+                outimgs.append(frame) 
+
             ### show image
             cv2.imshow('frame',frame)
+
+            ### look for a way out
             keycode = cv2.waitKey(10)
             if keycode & 0xFF == ord('p'):  # pause
                 while True:
@@ -233,17 +291,43 @@ if __name__ == '__main__':
                         break
 
             if keycode & 0xFF == ord('q'):  # quit (immediately)
-                replay = 0
-                break
+                if outvid is not None or outgif is not None:
+                    print("Cannot stop now..writing video. Try on next loop")
+                else:
+                    replay = 0
+                    break
             elif keycode & 0xFF == ord('e'):  # end (eventually)
                 replay = 0
             elif keycode & 0xFF == ord('r'):  # restart
-                replay = 1
-                break
+                if outvid is not None or outgif is not None:
+                    print("Cannot rewind now..writing video. Try on next loop")
+                else:
+                    replay = 1
+                    break
 
             i_frames += 1
 
-    #cap.release()
+        # close video output if open
+        if outvid is not None:
+            outvid.release()
+            print(f"Successfully wrote {i_frames} frames to videofile file as={args.outvideo}") 
+            outvid = None
+        
+        # write gif if requested
+        if outgif is not None:
+            duration = round(spf * 1000)
+            imgs = [Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)) for img in outimgs]
+            with Image.new(mode=imgs[0].mode,size=imgs[0].size) as img:
+                img.save(outgif, format='GIF',
+                         append_images=imgs, 
+                         save_all=True, duration= duration, loop=0)
+
+            print(f"Successfully wrote {i_frames} frames to .gif file as={args.outgif}") 
+            outimgs = []
+            outgif = None
+
+        # End While loop
+
     cv2.destroyAllWindows()
 
     actual_fps = i_frames / (time() - start)
