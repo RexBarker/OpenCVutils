@@ -55,7 +55,7 @@ if __name__ == '__main__':
             frame = cv2.rotate(frame,cv2.ROTATE_90_CLOCKWISE)
         
         fname = str(n).rjust(padlength,'0') + '.' + imagetype
-        cv2.imwrite(os.path.join(outputdir,fname)) 
+        cv2.imwrite(os.path.join(outputdir,fname),frame) 
 
         n += 1
 
