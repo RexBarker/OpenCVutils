@@ -33,8 +33,13 @@ if __name__ == '__main__':
     else:
         outputdir = os.path.basename(inputdir).split('.')[0]
         outputdir = os.path.join(currdir,outputdir + "_frames") 
-        if not os.path.exists(outputdir):
-            os.mkdir(outputdir)
+
+    if not os.path.exists(outputdir):
+        dout = '.'
+        for din in outputdir.split('/'):
+            dout = dout + '/' + din
+            if not os.path.exists(dout):
+                os.mkdir(dout)
 
     cap = cv2.VideoCapture(inputfile)
 
