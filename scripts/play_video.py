@@ -67,6 +67,16 @@ def get_fps(vfile):
     else:
         return None
 
+def get_fourcc_string(vfile):
+    if not os.path.isdir(vfile):
+        cap = cv2.VideoCapture(vfile)
+        vcodec = cap.get(cv2.CAP_PROP_FOURCC)
+        vcodecstr = "".join([chr((int(vcodec) >> 8 * i) & 0xFF) for i in range(4)])
+        cap.release()
+        print(f"File spec vcodec ={vcodecstr}")
+        return vcodecstr 
+    else:
+        return None
 
 def get_nframes(vfile):
     if not os.path.isdir(vfile):
@@ -187,6 +197,7 @@ if __name__ == '__main__':
     
     spf = float(1.0/fps)
 
+    get_fourcc_string(vfile)
     n_frames = get_nframes(vfile) 
     width,height = get_WidthHeight(vfile) 
     current = 0.0
