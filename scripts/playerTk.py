@@ -26,7 +26,7 @@ cap = cv2.VideoCapture(vfile)
 
 #Set up GUI
 window = tk.Tk()  #Makes main window
-window.wm_title("Digital Microscope")
+window.wm_title("Play video Tk")
 window.config(background="#FFFFFF")
 
 #Graphics window
