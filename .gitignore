@@ -2,4 +2,7 @@
 **/launch.json
 **/settings.json
 **/.ipynb_checkpoints
+*.mp4
+*.mov
+*.avi
 .DS_Store
